@@ -410,6 +410,30 @@
     white-space: nowrap;
   }
 
+  /* ── Help Panel ── */
+  .help-panel {
+    display: none;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px 24px;
+  }
+  .help-panel.active { display: block; }
+  .help-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .help-card h2 { font-size: 17px; margin-bottom: 12px; }
+  .help-card h3 { font-size: 14px; margin: 16px 0 6px; color: var(--text); }
+  .help-card p, .help-card li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .help-card ul { padding-left: 20px; margin: 4px 0; }
+  .help-card li { margin-bottom: 4px; }
+
   /* ── Mobile ── */
   @media (max-width: 600px) {
     .top-bar { padding: 12px 16px; }
@@ -457,6 +481,7 @@
     <div class="filter-tabs">
       <button class="filter-tab active" data-filter="needs-reply" onclick="setFilter('needs-reply')">Needs Reply</button>
       <button class="filter-tab" data-filter="all" onclick="setFilter('all')">All Unread</button>
+      <button class="filter-tab" data-filter="help" onclick="setFilter('help')">It isn't working</button>
     </div>
     <div class="filter-sep"></div>
     <select class="date-filter" id="date-filter" onchange="applyFilters()">
@@ -466,6 +491,29 @@
       <option value="30d">Last 30 days</option>
     </select>
     <span class="filter-count" id="filter-count"></span>
+  </div>
+
+  <div class="help-panel" id="help-panel">
+    <div class="help-card">
+      <h2>Why am I seeing "AI analysis failed"?</h2>
+      <p>This app uses a free AI service (Groq) to analyse your emails. The free tier has a daily limit of 100,000 tokens (~140 emails).</p>
+
+      <h3>Common causes</h3>
+      <ul>
+        <li><strong>Rate limited</strong> — You've used too many tokens today. Each email uses ~700 tokens (input + output). Refreshing multiple times reprocesses all emails, burning through tokens quickly.</li>
+        <li><strong>Temporary API outage</strong> — Groq's servers may be briefly unavailable. Wait a minute and try again.</li>
+      </ul>
+
+      <h3>How to fix it</h3>
+      <ul>
+        <li><strong>Wait a few minutes</strong> — The rate limit resets on a rolling window. Usually 2-3 minutes is enough.</li>
+        <li><strong>Avoid refreshing repeatedly</strong> — Each refresh reprocesses all emails from scratch.</li>
+        <li><strong>Normal daily use is fine</strong> — 25 emails/day uses ~17,500 tokens, well under the 100k limit.</li>
+      </ul>
+
+      <h3>Still not working?</h3>
+      <p>Open your browser's Developer Tools (Cmd+Option+I on Mac) and check the Console tab for detailed error messages.</p>
+    </div>
   </div>
 
   <div id="progress-bar">
@@ -769,7 +817,18 @@ function setFilter(filter) {
   document.querySelectorAll('.filter-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.filter === filter);
   });
-  applyFilters();
+
+  const helpPanel = document.getElementById('help-panel');
+  const digestList = document.getElementById('digest-list');
+
+  if (filter === 'help') {
+    helpPanel.classList.add('active');
+    digestList.style.display = 'none';
+  } else {
+    helpPanel.classList.remove('active');
+    digestList.style.display = 'flex';
+    applyFilters();
+  }
 }
 
 function applyFilters() {
