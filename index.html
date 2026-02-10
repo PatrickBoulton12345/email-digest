@@ -662,8 +662,8 @@ async function fetchAndProcess() {
         draftResponse = claude.draftResponse || '';
         needsResponse = claude.needsResponse !== false;
       } catch (err) {
-        console.error('Claude error for', msg.subject, err);
-        issueSummary = 'AI analysis failed — review email manually.';
+        console.error('AI error for', msg.subject, err);
+        issueSummary = 'AI analysis failed: ' + err.message;
         draftResponse = '';
         needsResponse = true;
       }
@@ -734,7 +734,9 @@ ${bodyText}`;
   }
 
   const data = await resp.json();
-  const text = data.choices?.[0]?.message?.content || '{}';
+  let text = data.choices?.[0]?.message?.content || '{}';
+  // Strip markdown fences if present
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   return JSON.parse(text);
 }
 
