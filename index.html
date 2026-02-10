@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Digest</title>
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f7;
+    --card: #fff;
+    --border: #e0e0e0;
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --accent: #0071e3;
+    --green: #34c759;
+    --green-bg: #e8f9ed;
+    --blue: #007aff;
+    --blue-bg: #e5f1ff;
+    --gray: #8e8e93;
+    --gray-bg: #f2f2f7;
+    --red: #ff3b30;
+    --red-bg: #ffe5e5;
+    --sent-green: #30d158;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Login Screen ── */
+  #login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 24px;
+  }
+  #login-screen h1 { font-size: 28px; font-weight: 700; }
+  #login-screen p { color: var(--text-secondary); max-width: 360px; text-align: center; }
+
+  .btn-microsoft {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 28px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .btn-microsoft:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .btn-microsoft svg { width: 20px; height: 20px; }
+
+  /* ── App Shell ── */
+  #app { display: none; }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-right { display: flex; align-items: center; gap: 12px; }
+  .user-name { font-size: 14px; color: var(--text-secondary); }
+
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-gray { background: var(--gray-bg); color: var(--text); }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+  /* ── Progress / Loading ── */
+  #progress-bar {
+    display: none;
+    padding: 20px 24px;
+    text-align: center;
+  }
+  .progress-track {
+    width: 100%;
+    max-width: 400px;
+    height: 6px;
+    background: var(--gray-bg);
+    border-radius: 3px;
+    margin: 12px auto 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+  #progress-text { font-size: 14px; color: var(--text-secondary); }
+
+  /* ── Email Cards ── */
+  .digest-list {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .email-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+  }
+  .email-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 16px 12px;
+  }
+  .status-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+    border: 2px solid var(--gray);
+    background: transparent;
+  }
+  .status-dot.pending { border-color: var(--gray); }
+  .status-dot.approved { border-color: var(--green); background: var(--green); }
+  .status-dot.edited { border-color: var(--blue); background: var(--blue); }
+  .status-dot.skipped { border-color: var(--gray); background: var(--gray); }
+  .status-dot.sent { border-color: var(--sent-green); background: var(--sent-green); box-shadow: 0 0 0 3px rgba(48,209,88,0.2); }
+
+  .card-meta { flex: 1; min-width: 0; }
+  .card-sender { font-weight: 600; font-size: 15px; }
+  .card-subject {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-time { font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+
+  .card-body { padding: 0 16px 16px; }
+
+  /* Issue summary via <details> */
+  .card-body details {
+    margin-bottom: 12px;
+  }
+  .card-body summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 0;
+  }
+  .card-body summary:hover { color: var(--text); }
+  .issue-text {
+    font-size: 14px;
+    color: var(--text);
+    padding: 8px 12px;
+    background: var(--gray-bg);
+    border-radius: 8px;
+    margin-top: 4px;
+    line-height: 1.6;
+  }
+
+  /* Draft response */
+  .draft-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .draft-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    background: var(--gray-bg);
+    color: var(--text);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .draft-textarea:read-only { cursor: default; }
+  .draft-textarea:not(:read-only) {
+    background: #fff;
+    border-color: var(--blue);
+    outline: none;
+  }
+
+  .no-response {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 8px 0;
+  }
+
+  /* Action buttons */
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: #fafafa;
+  }
+  .card-actions .btn { flex: 1; text-align: center; }
+
+  .status-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    border-top: 1px solid var(--border);
+    background: #fafafa;
+  }
+  .status-label.approved { color: var(--green); background: var(--green-bg); }
+  .status-label.edited { color: var(--blue); background: var(--blue-bg); }
+  .status-label.skipped { color: var(--gray); }
+  .status-label.sent { color: var(--sent-green); background: var(--green-bg); }
+  .status-label.error { color: var(--red); background: var(--red-bg); }
+
+  /* ── Batch Send Bar ── */
+  #send-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+  }
+  #send-bar.hidden { display: none; }
+  #send-bar-text { font-size: 14px; font-weight: 500; }
+
+  /* ── Confirmation Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 8px; }
+  .modal p { color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; }
+  .modal-btns { display: flex; gap: 12px; }
+  .modal-btns .btn { flex: 1; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-secondary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
+
+  /* ── Error banner ── */
+  .error-banner {
+    padding: 12px 24px;
+    background: var(--red-bg);
+    color: var(--red);
+    font-size: 14px;
+    text-align: center;
+    display: none;
+  }
+  .error-banner.active { display: block; }
+
+  /* ── Mobile ── */
+  @media (max-width: 600px) {
+    .top-bar { padding: 12px 16px; }
+    .top-bar h1 { font-size: 17px; }
+    .digest-list { padding: 12px; }
+    .card-actions { flex-wrap: wrap; }
+    .card-actions .btn { flex: 1 1 calc(50% - 4px); }
+    #send-bar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+    #send-bar .btn { width: 100%; }
+  }
+
+  /* Space for fixed send bar */
+  .digest-list { padding-bottom: 80px; }
+</style>
+</head>
+<body>
+
+<!-- ── Login Screen ── -->
+<div id="login-screen">
+  <h1>Email Digest</h1>
+  <p>Connect your Outlook inbox to get AI-drafted responses for your unread emails.</p>
+  <button class="btn-microsoft" onclick="signIn()">
+    <svg viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+    Sign in with Microsoft
+  </button>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+  <div class="top-bar">
+    <h1>Email Digest</h1>
+    <div class="top-bar-right">
+      <span class="user-name" id="user-name"></span>
+      <button class="btn btn-outline btn-sm" onclick="fetchAndProcess()" id="btn-refresh">Refresh</button>
+      <button class="btn btn-outline btn-sm" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <div id="progress-bar">
+    <div id="progress-text">Loading emails...</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
+
+  <div class="digest-list" id="digest-list"></div>
+
+  <div id="send-bar" class="hidden">
+    <span id="send-bar-text">0 approved, ready to send</span>
+    <button class="btn btn-green" onclick="showSendConfirm()">Send All Approved</button>
+  </div>
+</div>
+
+<!-- ── Confirm Modal ── -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h2>Send Replies?</h2>
+    <p id="confirm-text">Send 0 approved replies?</p>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="hideModal()">Cancel</button>
+      <button class="btn btn-green" onclick="sendAllApproved()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  CONFIG — Replace CLIENT_ID with yours
+// ══════════════════════════════════════════
+const CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // Azure App Registration client ID
+const REDIRECT_URI = window.location.origin;
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const CLAUDE_PROXY = '/api/claude';
+
+// ══════════════════════════════════════════
+//  MSAL SETUP
+// ══════════════════════════════════════════
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/consumers',
+    redirectUri: REDIRECT_URI
+  },
+  cache: { cacheLocation: 'localStorage' }
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+const loginRequest = {
+  scopes: ['Mail.Read', 'Mail.Send', 'User.Read', 'offline_access']
+};
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let emails = []; // { id, from, subject, receivedAt, bodyText, issueSummary, draftResponse, status, needsResponse }
+
+// ══════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════
+async function signIn() {
+  try {
+    const resp = await msalInstance.loginPopup(loginRequest);
+    msalInstance.setActiveAccount(resp.account);
+    showApp(resp.account);
+    fetchAndProcess();
+  } catch (err) {
+    console.error('Login failed:', err);
+    showError('Sign-in failed. Please allow the popup and try again.');
+  }
+}
+
+function signOut() {
+  msalInstance.logoutPopup();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function getToken() {
+  const account = msalInstance.getActiveAccount();
+  if (!account) throw new Error('No active account');
+  try {
+    const resp = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
+    return resp.accessToken;
+  } catch {
+    const resp = await msalInstance.acquireTokenPopup(loginRequest);
+    return resp.accessToken;
+  }
+}
+
+function showApp(account) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-name').textContent = account.name || account.username;
+}
+
+// Check for existing session on load
+(async () => {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    msalInstance.setActiveAccount(accounts[0]);
+    showApp(accounts[0]);
+    fetchAndProcess();
+  }
+})();
+
+// ══════════════════════════════════════════
+//  GRAPH API HELPERS
+// ══════════════════════════════════════════
+async function graphGet(url) {
+  const token = await getToken();
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error(`Graph API ${resp.status}: ${resp.statusText}`);
+  return resp.json();
+}
+
+async function graphPost(url, body) {
+  const token = await getToken();
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(`Graph API ${resp.status}: ${resp.statusText}`);
+  return resp;
+}
+
+function stripHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent.replace(/\s+/g, ' ').trim();
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+// ══════════════════════════════════════════
+//  FETCH & PROCESS
+// ══════════════════════════════════════════
+async function fetchAndProcess() {
+  emails = [];
+  hideError();
+  document.getElementById('digest-list').innerHTML = '';
+  document.getElementById('send-bar').classList.add('hidden');
+  document.getElementById('progress-bar').style.display = 'block';
+  document.getElementById('btn-refresh').disabled = true;
+  setProgress('Fetching unread emails...', 0);
+
+  try {
+    const data = await graphGet(
+      `${GRAPH_BASE}/me/mailFolders/Inbox/messages?$filter=isRead eq false&$top=25&$orderby=receivedDateTime desc&$select=id,from,subject,body,receivedDateTime`
+    );
+
+    const messages = data.value || [];
+    if (messages.length === 0) {
+      document.getElementById('progress-bar').style.display = 'none';
+      document.getElementById('digest-list').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">&#9993;</div>
+          <h2>Inbox Zero</h2>
+          <p>No unread emails. Check back later.</p>
+        </div>`;
+      document.getElementById('btn-refresh').disabled = false;
+      return;
+    }
+
+    setProgress(`Processing 0 of ${messages.length} emails...`, 0);
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      const bodyText = stripHtml(msg.body?.content || '').slice(0, 2000);
+      const fromName = msg.from?.emailAddress?.name || msg.from?.emailAddress?.address || 'Unknown';
+      const fromAddr = msg.from?.emailAddress?.address || '';
+
+      setProgress(`Processing ${i + 1} of ${messages.length} emails...`, ((i + 1) / messages.length) * 100);
+
+      let issueSummary = '';
+      let draftResponse = '';
+      let needsResponse = true;
+
+      try {
+        const claude = await callClaude(fromName, fromAddr, msg.subject, bodyText);
+        issueSummary = claude.issueSummary || '';
+        draftResponse = claude.draftResponse || '';
+        needsResponse = claude.needsResponse !== false;
+      } catch (err) {
+        console.error('Claude error for', msg.subject, err);
+        issueSummary = 'AI analysis failed — review email manually.';
+        draftResponse = '';
+        needsResponse = true;
+      }
+
+      emails.push({
+        id: msg.id,
+        from: fromName,
+        fromAddr,
+        subject: msg.subject || '(No subject)',
+        receivedAt: msg.receivedDateTime,
+        bodyText,
+        issueSummary,
+        draftResponse,
+        needsResponse,
+        status: 'pending' // pending | approved | edited | skipped | sent | error
+      });
+
+      // Delay between Claude calls
+      if (i < messages.length - 1) await sleep(500);
+    }
+
+    document.getElementById('progress-bar').style.display = 'none';
+    renderDigest();
+
+  } catch (err) {
+    console.error('Fetch error:', err);
+    document.getElementById('progress-bar').style.display = 'none';
+    showError('Failed to fetch emails. ' + err.message);
+  }
+
+  document.getElementById('btn-refresh').disabled = false;
+}
+
+// ══════════════════════════════════════════
+//  CLAUDE API
+// ══════════════════════════════════════════
+async function callClaude(fromName, fromAddr, subject, bodyText) {
+  const systemPrompt = `You are an email assistant. Analyze the email and produce a JSON response with these fields:
+- "issueSummary": A concise 1-3 sentence summary of what the email is about and any action items.
+- "draftResponse": A professional, helpful draft reply. Keep it concise (2-5 sentences).
+- "needsResponse": Boolean. Set to false for newsletters, notifications, marketing, receipts, or automated messages that don't need a reply.
+
+If needsResponse is false, set draftResponse to an empty string.
+Return ONLY valid JSON, no markdown fences.`;
+
+  const userMsg = `From: ${fromName} <${fromAddr}>
+Subject: ${subject}
+
+${bodyText}`;
+
+  const resp = await fetch(CLAUDE_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5-20250514',
+      max_tokens: 512,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  const text = data.content?.[0]?.text || '{}';
+  return JSON.parse(text);
+}
+
+// ══════════════════════════════════════════
+//  RENDER DIGEST
+// ══════════════════════════════════════════
+function renderDigest() {
+  const list = document.getElementById('digest-list');
+  list.innerHTML = '';
+
+  emails.forEach((email, idx) => {
+    const card = document.createElement('div');
+    card.className = 'email-card';
+    card.id = `card-${idx}`;
+    card.innerHTML = buildCardHtml(email, idx);
+    list.appendChild(card);
+  });
+
+  updateSendBar();
+}
+
+function buildCardHtml(email, idx) {
+  const statusClass = email.status;
+  const time = timeAgo(email.receivedAt);
+
+  let bodyHtml = '';
+
+  // Issue summary
+  bodyHtml += `<div class="card-body">
+    <details>
+      <summary>Issue Summary</summary>
+      <div class="issue-text">${escapeHtml(email.issueSummary)}</div>
+    </details>`;
+
+  // Draft response
+  if (email.needsResponse && email.draftResponse) {
+    const isEditing = email.status === 'editing';
+    const readonly = (email.status !== 'editing') ? 'readonly' : '';
+    bodyHtml += `<div class="draft-label">Draft Response</div>
+      <textarea class="draft-textarea" id="draft-${idx}" ${readonly}>${escapeHtml(email.draftResponse)}</textarea>`;
+  } else if (!email.needsResponse) {
+    bodyHtml += `<div class="no-response">No response needed</div>`;
+  }
+
+  bodyHtml += `</div>`;
+
+  // Actions or status label
+  let actionsHtml = '';
+  if (email.status === 'pending' || email.status === 'editing') {
+    if (email.needsResponse && email.draftResponse) {
+      actionsHtml = `<div class="card-actions">
+        <button class="btn btn-green btn-sm" onclick="setStatus(${idx}, 'approved')">Approve</button>
+        <button class="btn btn-blue btn-sm" onclick="toggleEdit(${idx})">${email.status === 'editing' ? 'Done Editing' : 'Edit'}</button>
+        <button class="btn btn-gray btn-sm" onclick="setStatus(${idx}, 'skipped')">Skip</button>
+      </div>`;
+    } else {
+      actionsHtml = `<div class="card-actions">
+        <button class="btn btn-gray btn-sm" onclick="setStatus(${idx}, 'skipped')">Dismiss</button>
+      </div>`;
+    }
+  } else if (email.status === 'approved') {
+    actionsHtml = `<div class="status-label approved">&#10003; Approved — <a href="#" onclick="setStatus(${idx}, 'pending'); return false;">undo</a></div>`;
+  } else if (email.status === 'edited') {
+    actionsHtml = `<div class="status-label edited">&#9998; Edited — <a href="#" onclick="setStatus(${idx}, 'pending'); return false;">undo</a></div>`;
+  } else if (email.status === 'skipped') {
+    actionsHtml = `<div class="status-label skipped">Skipped — <a href="#" onclick="setStatus(${idx}, 'pending'); return false;">undo</a></div>`;
+  } else if (email.status === 'sent') {
+    actionsHtml = `<div class="status-label sent">&#10003; Sent</div>`;
+  } else if (email.status === 'error') {
+    actionsHtml = `<div class="status-label error">Failed to send — <a href="#" onclick="setStatus(${idx}, 'approved'); return false;">retry</a></div>`;
+  }
+
+  return `
+    <div class="card-header">
+      <div class="status-dot ${statusClass}"></div>
+      <div class="card-meta">
+        <div class="card-sender">${escapeHtml(email.from)}</div>
+        <div class="card-subject">${escapeHtml(email.subject)}</div>
+      </div>
+      <div class="card-time">${time}</div>
+    </div>
+    ${bodyHtml}
+    ${actionsHtml}`;
+}
+
+function setStatus(idx, status) {
+  // Save any edits before changing status
+  const textarea = document.getElementById(`draft-${idx}`);
+  if (textarea && emails[idx].status === 'editing') {
+    emails[idx].draftResponse = textarea.value;
+  }
+
+  emails[idx].status = status;
+
+  // Re-render this card
+  const card = document.getElementById(`card-${idx}`);
+  card.innerHTML = buildCardHtml(emails[idx], idx);
+  updateSendBar();
+}
+
+function toggleEdit(idx) {
+  const email = emails[idx];
+  if (email.status === 'editing') {
+    // Save edit
+    const textarea = document.getElementById(`draft-${idx}`);
+    email.draftResponse = textarea.value;
+    email.status = 'edited';
+  } else {
+    email.status = 'editing';
+  }
+
+  const card = document.getElementById(`card-${idx}`);
+  card.innerHTML = buildCardHtml(email, idx);
+  updateSendBar();
+
+  // Focus the textarea if now editing
+  if (email.status === 'editing') {
+    const ta = document.getElementById(`draft-${idx}`);
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+}
+
+// ══════════════════════════════════════════
+//  SEND BAR
+// ══════════════════════════════════════════
+function updateSendBar() {
+  const ready = emails.filter(e => e.status === 'approved' || e.status === 'edited');
+  const bar = document.getElementById('send-bar');
+  const text = document.getElementById('send-bar-text');
+
+  if (ready.length > 0) {
+    bar.classList.remove('hidden');
+    text.textContent = `${ready.length} approved, ready to send`;
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function showSendConfirm() {
+  const count = emails.filter(e => e.status === 'approved' || e.status === 'edited').length;
+  document.getElementById('confirm-text').textContent = `Send ${count} approved repl${count === 1 ? 'y' : 'ies'}?`;
+  document.getElementById('confirm-modal').classList.add('active');
+}
+
+function hideModal() {
+  document.getElementById('confirm-modal').classList.remove('active');
+}
+
+// ══════════════════════════════════════════
+//  BATCH SEND
+// ══════════════════════════════════════════
+async function sendAllApproved() {
+  hideModal();
+
+  const toSend = emails
+    .map((e, i) => ({ email: e, idx: i }))
+    .filter(({ email }) => email.status === 'approved' || email.status === 'edited');
+
+  for (const { email, idx } of toSend) {
+    try {
+      await graphPost(`${GRAPH_BASE}/me/messages/${email.id}/reply`, {
+        message: {},
+        comment: email.draftResponse
+      });
+      email.status = 'sent';
+    } catch (err) {
+      console.error('Send failed for', email.subject, err);
+      email.status = 'error';
+    }
+
+    const card = document.getElementById(`card-${idx}`);
+    card.innerHTML = buildCardHtml(email, idx);
+    await sleep(300);
+  }
+
+  updateSendBar();
+}
+
+// ══════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setProgress(text, pct) {
+  document.getElementById('progress-text').textContent = text;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function showError(msg) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = msg;
+  banner.classList.add('active');
+}
+
+function hideError() {
+  document.getElementById('error-banner').classList.remove('active');
+}
+</script>
+</body>
+</html>
