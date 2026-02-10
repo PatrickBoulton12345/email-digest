@@ -24,6 +24,26 @@
     --red: #ff3b30;
     --red-bg: #ffe5e5;
     --sent-green: #30d158;
+    --card-actions-bg: #fafafa;
+  }
+
+  [data-theme="dark"] {
+    --bg: #1c1c1e;
+    --card: #2c2c2e;
+    --border: #3a3a3c;
+    --text: #f5f5f7;
+    --text-secondary: #98989d;
+    --accent: #0a84ff;
+    --green: #30d158;
+    --green-bg: #1a3a2a;
+    --blue: #0a84ff;
+    --blue-bg: #1a2a3a;
+    --gray: #8e8e93;
+    --gray-bg: #3a3a3c;
+    --red: #ff453a;
+    --red-bg: #3a1a1a;
+    --sent-green: #30d158;
+    --card-actions-bg: #252527;
   }
 
   body {
@@ -51,7 +71,7 @@
     align-items: center;
     gap: 10px;
     padding: 12px 28px;
-    background: #fff;
+    background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 16px;
@@ -226,7 +246,7 @@
   }
   .draft-textarea:read-only { cursor: default; }
   .draft-textarea:not(:read-only) {
-    background: #fff;
+    background: var(--card);
     border-color: var(--blue);
     outline: none;
   }
@@ -244,7 +264,7 @@
     gap: 8px;
     padding: 12px 16px;
     border-top: 1px solid var(--border);
-    background: #fafafa;
+    background: var(--card-actions-bg);
   }
   .card-actions .btn { flex: 1; text-align: center; }
 
@@ -257,7 +277,7 @@
     font-size: 14px;
     font-weight: 500;
     border-top: 1px solid var(--border);
-    background: #fafafa;
+    background: var(--card-actions-bg);
   }
   .status-label.approved { color: var(--green); background: var(--green-bg); }
   .status-label.edited { color: var(--blue); background: var(--blue-bg); }
@@ -416,6 +436,7 @@
     <svg viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
     Sign in with Microsoft
   </button>
+  <button class="btn btn-outline btn-sm" onclick="toggleTheme()" id="btn-theme-login" title="Toggle dark mode">Dark</button>
 </div>
 
 <!-- ── App ── -->
@@ -425,6 +446,7 @@
     <div class="top-bar-right">
       <span class="user-name" id="user-name"></span>
       <button class="btn btn-outline btn-sm" onclick="fetchAndProcess()" id="btn-refresh">Refresh</button>
+      <button class="btn btn-outline btn-sm" onclick="toggleTheme()" id="btn-theme" title="Toggle dark mode">Dark</button>
       <button class="btn btn-outline btn-sm" onclick="signOut()">Sign out</button>
     </div>
   </div>
@@ -966,6 +988,33 @@ function showError(msg) {
 function hideError() {
   document.getElementById('error-banner').classList.remove('active');
 }
+
+// ══════════════════════════════════════════
+//  DARK MODE
+// ══════════════════════════════════════════
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeButtons(newTheme);
+}
+
+function updateThemeButtons(theme) {
+  const label = theme === 'dark' ? 'Light' : 'Dark';
+  const btn1 = document.getElementById('btn-theme');
+  const btn2 = document.getElementById('btn-theme-login');
+  if (btn1) btn1.textContent = label;
+  if (btn2) btn2.textContent = label;
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeButtons(saved);
+})();
 </script>
 </body>
 </html>
