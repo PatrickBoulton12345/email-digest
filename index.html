@@ -328,10 +328,73 @@
   }
   .error-banner.active { display: block; }
 
+  /* ── Filter Bar ── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--gray-bg);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .filter-tab {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-tab.active {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .filter-tab:hover:not(.active) { color: var(--text); }
+
+  .filter-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .date-filter {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--card);
+    cursor: pointer;
+  }
+
+  .filter-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
   /* ── Mobile ── */
   @media (max-width: 600px) {
     .top-bar { padding: 12px 16px; }
     .top-bar h1 { font-size: 17px; }
+    .filter-bar { padding: 10px 16px; gap: 8px; }
     .digest-list { padding: 12px; }
     .card-actions { flex-wrap: wrap; }
     .card-actions .btn { flex: 1 1 calc(50% - 4px); }
@@ -367,6 +430,21 @@
   </div>
 
   <div class="error-banner" id="error-banner"></div>
+
+  <div class="filter-bar" id="filter-bar" style="display:none;">
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="needs-reply" onclick="setFilter('needs-reply')">Needs Reply</button>
+      <button class="filter-tab" data-filter="all" onclick="setFilter('all')">All Unread</button>
+    </div>
+    <div class="filter-sep"></div>
+    <select class="date-filter" id="date-filter" onchange="applyFilters()">
+      <option value="all">All dates</option>
+      <option value="today">Today</option>
+      <option value="7d">Last 7 days</option>
+      <option value="30d">Last 30 days</option>
+    </select>
+    <span class="filter-count" id="filter-count"></span>
+  </div>
 
   <div id="progress-bar">
     <div id="progress-text">Loading emails...</div>
@@ -424,6 +502,7 @@ const loginRequest = {
 //  STATE
 // ══════════════════════════════════════════
 let emails = []; // { id, from, subject, receivedAt, bodyText, issueSummary, draftResponse, status, needsResponse }
+let activeFilter = 'needs-reply'; // 'needs-reply' | 'all'
 
 // ══════════════════════════════════════════
 //  AUTH
@@ -640,11 +719,61 @@ ${bodyText}`;
 // ══════════════════════════════════════════
 //  RENDER DIGEST
 // ══════════════════════════════════════════
+function getFilteredEmails() {
+  const dateVal = document.getElementById('date-filter').value;
+  let cutoff = 0;
+  if (dateVal === 'today') {
+    const now = new Date();
+    cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  } else if (dateVal === '7d') {
+    cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  } else if (dateVal === '30d') {
+    cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  }
+
+  return emails
+    .map((email, idx) => ({ email, idx }))
+    .filter(({ email }) => {
+      if (activeFilter === 'needs-reply' && !email.needsResponse) return false;
+      if (cutoff && new Date(email.receivedAt).getTime() < cutoff) return false;
+      return true;
+    });
+}
+
+function setFilter(filter) {
+  activeFilter = filter;
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.filter === filter);
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  renderDigest();
+}
+
 function renderDigest() {
+  document.getElementById('filter-bar').style.display = 'flex';
   const list = document.getElementById('digest-list');
   list.innerHTML = '';
 
-  emails.forEach((email, idx) => {
+  const filtered = getFilteredEmails();
+
+  document.getElementById('filter-count').textContent =
+    `${filtered.length} of ${emails.length} emails`;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">&#9993;</div>
+        <h2>No matching emails</h2>
+        <p>Try changing the filter or date range.</p>
+      </div>`;
+    updateSendBar();
+    return;
+  }
+
+  filtered.forEach(({ email, idx }) => {
     const card = document.createElement('div');
     card.className = 'email-card';
     card.id = `card-${idx}`;
